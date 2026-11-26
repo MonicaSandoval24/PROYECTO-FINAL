@@ -2,10 +2,9 @@ import sqlite3
 import customtkinter as ctk
 from tkinter import messagebox
 
-import os
-
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_NAME = os.path.join(BASE_DIR, "smartstock.db")
+from database import conexion, inicializar
+from views.entradas_view import EntradasWindow
+from views.ventas_view import VentasWindow
 
 ctk.set_appearance_mode("light")
 ctk.set_default_color_theme("blue")
@@ -18,6 +17,8 @@ class SmartStockApp(ctk.CTk):
         self.geometry("1120x720")
         self.minsize(950, 620)
         self.selected_product_id = None
+        self.ventas_window = None
+        self.entradas_window = None
 
         self.create_database()
         self.create_interface()
@@ -25,21 +26,10 @@ class SmartStockApp(ctk.CTk):
 
     # ---------------- BASE DE DATOS ----------------
     def connect_db(self):
-        return sqlite3.connect(DB_NAME)
+        return conexion()
 
     def create_database(self):
-        with self.connect_db() as conn:
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS productos (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    codigo TEXT NOT NULL UNIQUE,
-                    nombre TEXT NOT NULL,
-                    categoria TEXT NOT NULL,
-                    precio REAL NOT NULL,
-                    stock INTEGER NOT NULL,
-                    stock_minimo INTEGER NOT NULL
-                )
-            """)
+        inicializar()
 
     # ---------------- INTERFAZ ----------------
     def create_interface(self):
@@ -71,8 +61,11 @@ class SmartStockApp(ctk.CTk):
             text_color="white", anchor="w"
         ).pack(fill="x", padx=20, pady=10)
 
+        self.add_menu_button(sidebar, "🛒  Ventas", self.open_ventas)
+        self.add_menu_button(sidebar, "📥  Entradas", self.open_entradas)
+
         ctk.CTkLabel(
-            sidebar, text="Prototipo inicial\nMódulo de productos",
+            sidebar, text="Segundo avance\nInventario, ventas y entradas",
             font=("Arial", 12), text_color="#BFDBFE",
             justify="left"
         ).pack(side="bottom", anchor="w", padx=20, pady=25)
@@ -202,6 +195,34 @@ class SmartStockApp(ctk.CTk):
             font=("Arial", 11), text_color="#64748B"
         ).grid(row=4, column=0, sticky="w", padx=18, pady=(0, 10))
 
+    def add_menu_button(self, parent, text, command):
+        ctk.CTkButton(
+            parent, text=text, font=("Arial", 15, "bold"), anchor="w",
+            fg_color="transparent", hover_color="#1E3A8A",
+            text_color="white", height=38, command=command
+        ).pack(fill="x", padx=12, pady=4)
+
+    def open_ventas(self):
+        if self.ventas_window is None or not self.ventas_window.winfo_exists():
+            self.ventas_window = VentasWindow(self, al_cambiar=self.load_products)
+        else:
+            self.ventas_window.recargar_productos()
+            self.ventas_window.lift()
+            self.ventas_window.focus_force()
+
+    def open_entradas(self):
+        if self.entradas_window is None or not self.entradas_window.winfo_exists():
+            self.entradas_window = EntradasWindow(self, al_cambiar=self.load_products)
+        else:
+            self.entradas_window.recargar_productos()
+            self.entradas_window.lift()
+            self.entradas_window.focus_force()
+
+    def refresh_windows(self):
+        for window in (self.ventas_window, self.entradas_window):
+            if window is not None and window.winfo_exists():
+                window.recargar_productos()
+
     def create_stat_card(self, parent, column, title, value_label):
         card = ctk.CTkFrame(parent, fg_color="white", corner_radius=12)
         card.grid(row=0, column=column, sticky="ew", padx=6, pady=4)
@@ -265,15 +286,16 @@ class SmartStockApp(ctk.CTk):
                     conn.execute("""
                         UPDATE productos
                         SET codigo=?, nombre=?, categoria=?, precio=?,
-                            stock=?, stock_minimo=?
+                            stock_minimo=?
                         WHERE id=?
-                    """, (codigo, nombre, categoria, precio, stock, minimo,
+                    """, (codigo, nombre, categoria, precio, minimo,
                           self.selected_product_id))
                     message = "Producto actualizado correctamente."
 
             messagebox.showinfo("SmartStock", message)
             self.clear_form()
             self.load_products()
+            self.refresh_windows()
         except sqlite3.IntegrityError:
             messagebox.showerror(
                 "Código duplicado",
@@ -357,8 +379,10 @@ class SmartStockApp(ctk.CTk):
             (self.minimo_entry, str(minimo))
         ]
         for entry, value in entries:
+            entry.configure(state="normal")
             entry.delete(0, "end")
             entry.insert(0, value)
+        self.stock_entry.configure(state="disabled")
 
     def delete_product(self):
         if self.selected_product_id is None:
@@ -372,13 +396,22 @@ class SmartStockApp(ctk.CTk):
             "Confirmar eliminación",
             "¿Seguro que deseas eliminar este producto?"
         ):
-            with self.connect_db() as conn:
-                conn.execute(
-                    "DELETE FROM productos WHERE id=?",
-                    (self.selected_product_id,)
+            try:
+                with self.connect_db() as conn:
+                    conn.execute(
+                        "DELETE FROM productos WHERE id=?",
+                        (self.selected_product_id,)
+                    )
+            except sqlite3.IntegrityError:
+                messagebox.showerror(
+                    "No se puede eliminar",
+                    "Este producto tiene ventas o entradas registradas, "
+                    "por eso no se puede eliminar."
                 )
+                return
             self.clear_form()
             self.load_products()
+            self.refresh_windows()
             messagebox.showinfo("SmartStock", "Producto eliminado.")
 
     def clear_form(self):
@@ -387,6 +420,7 @@ class SmartStockApp(ctk.CTk):
             self.codigo_entry, self.nombre_entry, self.categoria_entry,
             self.precio_entry, self.stock_entry, self.minimo_entry
         ]:
+            entry.configure(state="normal")
             entry.delete(0, "end")
 
 
