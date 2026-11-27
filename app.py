@@ -3,6 +3,7 @@ import customtkinter as ctk
 from tkinter import messagebox
 
 from database import conexion, inicializar
+from views.dashboard_view import DashboardWindow
 from views.entradas_view import EntradasWindow
 from views.ventas_view import VentasWindow
 
@@ -19,6 +20,7 @@ class SmartStockApp(ctk.CTk):
         self.selected_product_id = None
         self.ventas_window = None
         self.entradas_window = None
+        self.dashboard_window = None
 
         self.create_database()
         self.create_interface()
@@ -63,9 +65,10 @@ class SmartStockApp(ctk.CTk):
 
         self.add_menu_button(sidebar, "🛒  Ventas", self.open_ventas)
         self.add_menu_button(sidebar, "📥  Entradas", self.open_entradas)
+        self.add_menu_button(sidebar, "📊  Dashboard", self.open_dashboard)
 
         ctk.CTkLabel(
-            sidebar, text="Segundo avance\nInventario, ventas y entradas",
+            sidebar, text="Segundo avance\nInventario, ventas y dashboard",
             font=("Arial", 12), text_color="#BFDBFE",
             justify="left"
         ).pack(side="bottom", anchor="w", padx=20, pady=25)
@@ -204,7 +207,7 @@ class SmartStockApp(ctk.CTk):
 
     def open_ventas(self):
         if self.ventas_window is None or not self.ventas_window.winfo_exists():
-            self.ventas_window = VentasWindow(self, al_cambiar=self.load_products)
+            self.ventas_window = VentasWindow(self, al_cambiar=self.data_changed)
         else:
             self.ventas_window.recargar_productos()
             self.ventas_window.lift()
@@ -212,11 +215,24 @@ class SmartStockApp(ctk.CTk):
 
     def open_entradas(self):
         if self.entradas_window is None or not self.entradas_window.winfo_exists():
-            self.entradas_window = EntradasWindow(self, al_cambiar=self.load_products)
+            self.entradas_window = EntradasWindow(self, al_cambiar=self.data_changed)
         else:
             self.entradas_window.recargar_productos()
             self.entradas_window.lift()
             self.entradas_window.focus_force()
+
+    def open_dashboard(self):
+        if self.dashboard_window is None or not self.dashboard_window.winfo_exists():
+            self.dashboard_window = DashboardWindow(self)
+        else:
+            self.dashboard_window.actualizar()
+            self.dashboard_window.lift()
+            self.dashboard_window.focus_force()
+
+    def data_changed(self):
+        self.load_products()
+        if self.dashboard_window is not None and self.dashboard_window.winfo_exists():
+            self.dashboard_window.actualizar()
 
     def refresh_windows(self):
         for window in (self.ventas_window, self.entradas_window):
