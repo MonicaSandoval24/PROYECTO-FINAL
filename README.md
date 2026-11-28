@@ -1,6 +1,6 @@
 ## SmartStock & Sales Analytics
 
-![Logo de SmartStock](./logo.png)
+![Logo de SmartStock](./logosmartstock/logo.png)
 
 # Descripción:
 
